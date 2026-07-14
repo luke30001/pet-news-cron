@@ -1,7 +1,12 @@
 name: Pet News Cron
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Force a mode (news/review); leave blank for the normal random draw'
+        required: false
+        type: string
 
 concurrency:
   group: pet-news-cron
@@ -32,7 +37,7 @@ jobs:
         run: php gen-config.php
 
       - name: Run cron
-        run: php pet-news-cron.php
+        run: php pet-news-cron.php ${{ inputs.mode != '' && format('--mode={0}', inputs.mode) || '' }}
 
       - name: Persist product-rotation history
         run: |
