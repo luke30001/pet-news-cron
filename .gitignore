@@ -1,0 +1,5 @@
+pet-news-cron.config.php
+pet-news-cron.log
+pet-news-errors.log
+pet-news-cron.lock
+pet-news-cron.last-run

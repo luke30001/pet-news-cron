@@ -1,0 +1,47 @@
+name: Pet News Cron
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: pet-news-cron
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json, mbstring
+
+      - name: Generate config from secrets
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WP_REST_USER: ${{ secrets.WP_REST_USER }}
+          WP_REST_APP_PASSWORD: ${{ secrets.WP_REST_APP_PASSWORD }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+        run: php gen-config.php
+
+      - name: Run cron
+        run: php pet-news-cron.php
+
+      - name: Persist product-rotation history
+        run: |
+          if ! git diff --quiet -- pet-news-dataforseo-ranks.json; then
+            git config user.name "pet-news-cron-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add pet-news-dataforseo-ranks.json
+            git commit -m "Update product rotation history [skip ci]"
+            git push
+          else
+            echo "No history changes."
+          fi
