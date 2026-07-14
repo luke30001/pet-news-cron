@@ -39,6 +39,13 @@ jobs:
       - name: Run cron
         run: php pet-news-cron.php ${{ inputs.mode != '' && format('--mode={0}', inputs.mode) || '' }}
 
+      - name: Show run log
+        if: always()
+        run: |
+          echo "::group::pet-news-cron.log"
+          cat pet-news-cron.log 2>/dev/null || echo "(no log file)"
+          echo "::endgroup::"
+
       - name: Persist product-rotation history
         run: |
           if ! git diff --quiet -- pet-news-dataforseo-ranks.json; then
