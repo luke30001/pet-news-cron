@@ -1507,24 +1507,14 @@ if (empty($freshTitles)) {
     }
 }
 } elseif ($mode === 'review') {
-    // DataForSEO has intermittent outbound failures from Altervista. Keep that
-    // source for generic posts, but use the established OpenAI product-search
-    // flow for reviews so each locale can still publish into its dedicated
-    // product-reviews[-lang] category.
-    runReviewMode(
-        $siteUrl,
-        $wpUser,
-        $wpPass,
-        $reviewCategorySlug,
-        $amazonAssociateTag,
-        $openaiApiKey,
-        $openaiModelId,
-        $logFile,
-        $created,
-        $skipped,
-        $failedCount,
-        $dryRun
-    );
+    // runReviewMode() (OpenAI-based) was the original review path but reads
+    // $amazonAssociateTag/$openaiApiKey/$openaiModelId, which nothing in this
+    // script ever assigns — every review-mode run fatal-errors before logging
+    // anything, silently (found 2026-07-14: ~10h of 50%-drawn runs did nothing).
+    // runDataForSeoPosts() already has a fully-built 'review' kind (locale
+    // rotation, Amazon tag, disclosure text) that was wired up for 'generic'
+    // but never for review; use it here instead of the dead OpenAI path.
+    runDataForSeoPosts($config, 'review', $siteUrl, $wpUser, $wpPass, $reviewCategorySlug, $geminiApiKey, $geminiModelId, $logFile, $created, $skipped, $failedCount, $dryRun);
 }
 
 logmsg($logFile, "Done. created=$created skipped=$skipped failed=$failedCount");
