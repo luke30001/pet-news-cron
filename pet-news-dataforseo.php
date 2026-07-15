@@ -113,19 +113,12 @@ function runDataForSeoPosts(array $config, string $kind, string $siteUrl, string
     // Query all posts that carry the generator's product meta, irrespective of category:
     // a product used in an editorial post must never reappear as a review, or vice versa.
     $reviewed = fetchReviewedProducts($siteUrl, $wpUser, $wpPass, []);
+    // Restored 2026-07-15 (per original 2026-07-07 decision): a review trigger publishes
+    // all 5 languages in one run, not a single rotating locale. Now that the DataForSEO
+    // call timeout is 150s, a full run can take up to ~12.5 min worst-case (5 sequential
+    // calls) — cron triggers every 10 min queue behind this via the workflow's concurrency
+    // group instead of overlapping, so it delays rather than breaks subsequent runs.
     $publishLocales = PET_NEWS_LANGS;
-    if ($kind === 'review') {
-        // One locale per run: five search + generation passes exceed the hosting
-        // time budget, which previously meant the loop stopped after English.
-        // Start at Italian for the next run, then persistently rotate all portals.
-        $localeCodes = array_keys(PET_NEWS_LANGS);
-        $cursor = isset($history['_review_locale_cursor']) ? (int) $history['_review_locale_cursor'] : 1;
-        $cursor = (($cursor % count($localeCodes)) + count($localeCodes)) % count($localeCodes);
-        $lang = $localeCodes[$cursor];
-        $publishLocales = array($lang => PET_NEWS_LANGS[$lang]);
-        $history['_review_locale_cursor'] = ($cursor + 1) % count($localeCodes);
-        logmsg($logFile, "Review locale for this run: $lang");
-    }
     foreach ($publishLocales as $lang => $name) {
         try {
             $product = dataForSeoTrendingProduct($config, $lang, $reviewed, $history); // exactly one localized DataForSEO query
