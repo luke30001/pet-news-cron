@@ -284,8 +284,25 @@ $dryRun = PET_NEWS_CLI && in_array('--dry-run', $argv ?? [], true);
 if ($dryRun) {
     logmsg($logFile, 'DRY-RUN: generation + validation will run, but nothing will be published to WP.');
 }
-$mode = $forcedMode ?? ((mt_rand(1, 100) <= $reviewProbabilityPercent) ? 'review' : 'news');
-logmsg($logFile, "Mode: $mode" . ($forcedMode !== null ? (PET_NEWS_CLI ? ' (forced via --mode)' : ' (forced via ?mode=)') : " (random draw, {$reviewProbabilityPercent}% review chance)"));
+// Independent per-language draw (2026-07-15): each of the 5 languages gets its own
+// review-vs-news coin flip instead of one draw deciding all 5. This caps how many
+// languages can hit DataForSEO's live/advanced endpoint in the same run — firing it
+// 5x back-to-back correlated with the intermittent HTTP 500s DataForSEO returned on
+// slower markets (DE/ES) after 120-160s of live-crawl processing. --mode/?mode=
+// still forces every language to the same mode, for deterministic manual testing.
+if ($forcedMode !== null) {
+    $reviewLangs = $forcedMode === 'review' ? PET_NEWS_LANGS : [];
+    $newsLangs = $forcedMode === 'news' ? PET_NEWS_LANGS : [];
+    logmsg($logFile, "Mode: $forcedMode, all languages (" . (PET_NEWS_CLI ? 'forced via --mode' : 'forced via ?mode=') . ')');
+} else {
+    $reviewLangs = [];
+    $newsLangs = [];
+    foreach (PET_NEWS_LANGS as $lang => $langName) {
+        if (mt_rand(1, 100) <= $reviewProbabilityPercent) $reviewLangs[$lang] = $langName;
+        else $newsLangs[$lang] = $langName;
+    }
+    logmsg($logFile, "Per-language draw ({$reviewProbabilityPercent}% review chance each): review=" . (empty($reviewLangs) ? '-' : implode(',', array_keys($reviewLangs))) . ' news=' . (empty($newsLangs) ? '-' : implode(',', array_keys($newsLangs))));
+}
 
 // ---- generic HTTP helper over php streams (no curl extension on this box) ----
 function httpRequest(string $method, string $url, array $headers = [], ?string $body = null, int $timeoutSec = 30): array
@@ -1336,7 +1353,7 @@ $created = 0;
 $skipped = 0;
 $failedCount = 0;
 
-if ($mode === 'news') {
+if (!empty($newsLangs)) {
     // Reverted to Gemini-only generation for general pet news (2026-07-15): the
     // DataForSEO-backed 'generic' kind cost 5 paid API calls per run for content
     // that doesn't need real Amazon product data. DataForSEO stays reserved for
@@ -1462,7 +1479,7 @@ if (empty($freshTitles)) {
         $topic = $topicByTitleLower[mb_strtolower($title)] ?? 'lifestyle';
         $storyKey = substr(md5(mb_strtolower($title)), 0, 16);
 
-        foreach (PET_NEWS_LANGS as $lang => $langName) {
+        foreach ($newsLangs as $lang => $langName) {
             $t = $translationsByLang[$lang] ?? null;
             $langTitle = trim((string) ($t['title'] ?? ''));
             $langBody = trim((string) ($t['body'] ?? ''));
@@ -1516,7 +1533,9 @@ if (empty($freshTitles)) {
         }
     }
 }
-} elseif ($mode === 'review') {
+}
+
+if (!empty($reviewLangs)) {
     // runReviewMode() (OpenAI-based) was the original review path but reads
     // $amazonAssociateTag/$openaiApiKey/$openaiModelId, which nothing in this
     // script ever assigns — every review-mode run fatal-errors before logging
@@ -1524,7 +1543,7 @@ if (empty($freshTitles)) {
     // runDataForSeoPosts() already has a fully-built 'review' kind (locale
     // rotation, Amazon tag, disclosure text) that was wired up for 'generic'
     // but never for review; use it here instead of the dead OpenAI path.
-    runDataForSeoPosts($config, 'review', $siteUrl, $wpUser, $wpPass, $reviewCategorySlug, $geminiApiKey, $geminiModelId, $logFile, $created, $skipped, $failedCount, $dryRun);
+    runDataForSeoPosts($config, 'review', $siteUrl, $wpUser, $wpPass, $reviewCategorySlug, $geminiApiKey, $geminiModelId, $logFile, $created, $skipped, $failedCount, $dryRun, array_keys($reviewLangs));
 }
 
 logmsg($logFile, "Done. created=$created skipped=$skipped failed=$failedCount");
