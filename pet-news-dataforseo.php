@@ -30,7 +30,11 @@ function dataForSeoTrendingProduct(array $config, string $lang, array $reviewed,
     // got DataForSEO to silently drop connections from Altervista and, via the
     // short-lived Aruba relay, from Aruba's edge too.
     $auth = 'Authorization: Basic ' . base64_encode($config['DATAFORSEO_LOGIN'] . ':' . $config['DATAFORSEO_PASSWORD']);
-    $resp = httpRequest('POST', 'https://api.dataforseo.com/v3/merchant/amazon/products/live/advanced', [$auth, 'Content-Type: application/json'], json_encode($payload), 90);
+    // Raised 90 -> 150 on 2026-07-15: DataForSEO's live/advanced endpoint was observed
+    // timing out at exactly 90s on several real runs (IT/FR/EN) that would otherwise
+    // have likely completed — a standard-priority queued task (task_post) took 110s+
+    // for the same query, so 90s was too tight for the live endpoint's real p99.
+    $resp = httpRequest('POST', 'https://api.dataforseo.com/v3/merchant/amazon/products/live/advanced', [$auth, 'Content-Type: application/json'], json_encode($payload), 150);
     if ($resp['status'] < 200 || $resp['status'] >= 300) {
         throw new RuntimeException('DataForSEO request failed with HTTP ' . $resp['status']);
     }
