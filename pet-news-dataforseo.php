@@ -100,7 +100,7 @@ function dataForSeoGeminiArticle(string $apiKey, string $modelId, string $langNa
     return $article;
 }
 
-function runDataForSeoPosts(array $config, string $kind, string $siteUrl, string $wpUser, string $wpPass, string $categorySlug, string $geminiKey, string $geminiModel, string $logFile, int &$created, int &$skipped, int &$failed, bool $dryRun): void
+function runDataForSeoPosts(array $config, string $kind, string $siteUrl, string $wpUser, string $wpPass, string $categorySlug, string $geminiKey, string $geminiModel, string $logFile, int &$created, int &$skipped, int &$failed, bool $dryRun, ?array $onlyLangs = null): void
 {
     $historyFile = __DIR__ . '/pet-news-dataforseo-ranks.json';
     $history = is_file($historyFile) ? json_decode((string) file_get_contents($historyFile), true) : [];
@@ -113,12 +113,11 @@ function runDataForSeoPosts(array $config, string $kind, string $siteUrl, string
     // Query all posts that carry the generator's product meta, irrespective of category:
     // a product used in an editorial post must never reappear as a review, or vice versa.
     $reviewed = fetchReviewedProducts($siteUrl, $wpUser, $wpPass, []);
-    // Restored 2026-07-15 (per original 2026-07-07 decision): a review trigger publishes
-    // all 5 languages in one run, not a single rotating locale. Now that the DataForSEO
-    // call timeout is 150s, a full run can take up to ~12.5 min worst-case (5 sequential
-    // calls) — cron triggers every 10 min queue behind this via the workflow's concurrency
-    // group instead of overlapping, so it delays rather than breaks subsequent runs.
-    $publishLocales = PET_NEWS_LANGS;
+    // $onlyLangs restricts which locales run: since 2026-07-15, review mode is triggered
+    // by an independent per-language draw upstream (not a whole-run mode), so a given run
+    // may only need 0-5 of the 5 languages here — this avoids firing DataForSEO calls for
+    // languages that drew 'news' this run instead.
+    $publishLocales = $onlyLangs !== null ? array_intersect_key(PET_NEWS_LANGS, array_flip($onlyLangs)) : PET_NEWS_LANGS;
     foreach ($publishLocales as $lang => $name) {
         try {
             $product = dataForSeoTrendingProduct($config, $lang, $reviewed, $history); // exactly one localized DataForSEO query
