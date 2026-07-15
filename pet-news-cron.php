@@ -1337,8 +1337,11 @@ $skipped = 0;
 $failedCount = 0;
 
 if ($mode === 'news') {
-    runDataForSeoPosts($config, 'generic', $siteUrl, $wpUser, $wpPass, $categorySlug, $geminiApiKey, $geminiModelId, $logFile, $created, $skipped, $failedCount, $dryRun);
-} elseif (false) {
+    // Reverted to Gemini-only generation for general pet news (2026-07-15): the
+    // DataForSEO-backed 'generic' kind cost 5 paid API calls per run for content
+    // that doesn't need real Amazon product data. DataForSEO stays reserved for
+    // 'review' mode below, where real ASIN/price data is actually required for
+    // the affiliate links.
 try {
     $enCategoryId = fetchCategoryId($siteUrl, $wpUser, $wpPass, $categorySlug);
     $previousTitles = fetchRecentTitles($siteUrl, $wpUser, $wpPass, 24, $enCategoryId);
@@ -1469,6 +1472,13 @@ if (empty($freshTitles)) {
                 continue;
             }
             $tagId = $tagIdsByTopicLang[$topic][$lang] ?? 0;
+
+            if ($dryRun) {
+                logmsg($logFile, "[DRY-RUN] would publish news [$lang]: $langTitle");
+                $created++;
+                continue;
+            }
+
             try {
                 $post = publishPost(
                     $siteUrl,
